@@ -18,7 +18,7 @@ defmodule Harness.DelayedServing do
   require Logger
 
   def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    GenServer.start_link(__MODULE__, opts)
   end
 
   def init(opts) do
