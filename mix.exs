@@ -49,7 +49,8 @@ defmodule Harness.MixProject do
       {:plug_cowboy, "~> 2.5"},
       # {:bumblebee, github: "elixir-nx/bumblebee"},
       {:bumblebee, "~> 0.5.3"},
-      {:exla, ">= 0.0.0"}
+      {:exla, ">= 0.0.0"},
+      {:req, "~> 0.4"}
     ]
   end
 
