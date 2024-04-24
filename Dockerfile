@@ -32,7 +32,7 @@ RUN apt update -q && apt install -y ca-certificates wget && \
 
 
 # Install nvidia GPU support
-RUN apt-get install -y cuda-nvcc-12-2 libcublas-12-2 libcudnn8
+RUN apt-get install -y cuda-nvcc-12-2 libcublas-12-2 libcufft-12-2 libcudnn8
 
 # prepare build dir
 WORKDIR /app
@@ -91,8 +91,8 @@ RUN apt update -q && apt install -y ca-certificates wget && \
     dpkg -i /cuda-keyring.deb && apt update -q
 
 
-# Nvidia support in runtime layer
-RUN apt-get install -y --no-install-recommends cuda-nvcc-12-2 libcublas-12-2 libcudnn8
+# Nvidia support in runtime layer, and ffmpeg
+RUN apt-get install -y --no-install-recommends cuda-nvcc-12-2 libcublas-12-2 libcufft-12-2 libcudnn8 ffmpeg
 # Copy over needed nvidia support
 # COPY --from=builder /usr/local/bin/deviceQuery /usr/local/bin/deviceQuery
 
