@@ -22,9 +22,9 @@ defmodule Harness.Application do
       # Client must use the serving name specified here.
       # -----
 
-      {Harness.DelayedServing,
-       serving_name: Llama2ChatModel,
-       serving_fn: fn -> Harness.Llama2Chat.serving() end},
+      # {Harness.DelayedServing,
+      #  serving_name: Llama2ChatModel,
+      #  serving_fn: fn -> Harness.Llama2Chat.serving() end},
 
       # {Harness.DelayedServing,
       #  serving_name: ZephyrModel, serving_fn: fn -> Harness.Zephyr.serving() end},
@@ -32,6 +32,8 @@ defmodule Harness.Application do
       # {Harness.DelayedServing,
       #  serving_name: MistralInstructModel, serving_fn: fn -> Harness.MistralInstruct.serving() end}
     ]
+
+    Harness.log_node_name()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
