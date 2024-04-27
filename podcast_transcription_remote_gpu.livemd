@@ -1,0 +1,177 @@
+# Podcast Transcription with Remote GPU
+
+```elixir
+Mix.install([
+  {:req, "~> 0.4.14"},
+  {:fast_rss, "~> 0.5.0"},
+  {:bumblebee, "~> 0.5.3"},
+  {:exla, "~> 0.7.1"},
+  {:kino, "~> 0.12.3"}
+])
+```
+
+## Node Clustering
+
+```elixir
+Node.set_cookie(:"my-cookie-name")
+
+# TODO: replace with your remote node name (logged by harness)
+Node.connect(:"")
+```
+
+## Obtain Episodes
+
+```elixir
+rss_feed_url = "https://feeds.fireside.fm/elixiroutlaws/rss"
+
+%{body: rss_body} = Req.get!(rss_feed_url)
+
+{:ok, rss_feed} = FastRSS.parse_rss(rss_body)
+```
+
+```elixir
+# Grab the fields we care about
+episodes =
+  Enum.map(rss_feed["items"], fn item ->
+    %{
+      title: item["title"],
+      url: item["enclosure"]["url"]
+    }
+  end)
+```
+
+```elixir
+# For demonstration, limit the number of episodes to download and process
+episode_limit = 3
+
+episodes =
+  episodes
+  |> Enum.take(episode_limit)
+```
+
+## Transcribe / Formatting Helpers
+
+```elixir
+episodes =
+  Task.async_stream(
+    episodes,
+    fn episode ->
+      start_time = DateTime.utc_now()
+      transcription_output = Nx.Serving.batched_run(WhisperModel, {:file_url, episode.url})
+      end_time = DateTime.utc_now()
+
+      Map.merge(episode, %{
+        transcription: transcription_output.chunks,
+        transcription_processing_seconds: DateTime.diff(end_time, start_time)
+      })
+    end,
+    timeout: :infinity,
+    ordered: false
+  )
+  |> Stream.map(&elem(&1, 1))
+```
+
+```elixir
+calculate_transcription_speed_ratio = fn episode ->
+  audio_length =
+    episode.transcription
+    |> Enum.map(fn chunk -> chunk.end_timestamp_seconds end)
+    |> Enum.max()
+
+  audio_length / episode.transcription_processing_seconds
+end
+
+chunk_to_markdown = fn chunk ->
+  "- #{chunk.start_timestamp_seconds}: #{chunk.text}"
+end
+
+episode_to_markdown = fn episode ->
+  speed_ratio = Float.round(calculate_transcription_speed_ratio.(episode), 2)
+
+  """
+  # #{episode.title}
+
+  Transcribed by Whisper at #{speed_ratio}x speed.
+
+  ## Transcript
+
+  #{Enum.map(episode.transcription, &chunk_to_markdown.(&1)) |> Enum.join("\n")}
+  """
+end
+```
+
+<!-- livebook:{"branch_parent_index":2} -->
+
+## Run One
+
+```elixir
+episode = Enum.at(episodes, 0)
+
+Kino.Markdown.new(episode_to_markdown.(episode))
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Streaming One
+
+```elixir
+episode = Enum.at(episodes, 0)
+
+IO.inspect("# #{episode.title}")
+
+transcription_chunks = Nx.Serving.batched_run(WhisperStreamingModel, {:file_url, episode.url})
+
+Stream.each(transcription_chunks, fn chunk ->
+  IO.inspect(" - #{chunk.start_timestamp_seconds}–#{chunk.end_timestamp_seconds}: #{chunk.text}")
+end)
+|> Stream.run()
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Streaming Many
+
+```elixir
+Stream.take(episodes, 3)
+|> Task.async_stream(
+  fn episode ->
+    frame = Kino.Frame.new()
+
+    title = "# #{episode.title}\n"
+    Kino.Frame.render(frame, Kino.Markdown.new(title))
+
+    Kino.render(frame)
+
+    transcription_chunks = Nx.Serving.batched_run(WhisperStreamingModel, {:file_url, episode.url})
+
+    Stream.each(transcription_chunks, fn chunk ->
+      Kino.Frame.render(
+        frame,
+        Kino.Markdown.new(
+          title <>
+            " - #{chunk.start_timestamp_seconds}–#{chunk.end_timestamp_seconds}: #{chunk.text}"
+        )
+      )
+    end)
+    |> Stream.run()
+  end,
+  timeout: :infinity
+)
+|> Stream.run()
+```
+
+<!-- livebook:{"branch_parent_index":2} -->
+
+## Output to Files
+
+```elixir
+out_directory = Path.join([System.user_home!(), "Desktop", "Podcast Transcripts"])
+File.mkdir_p!(out_directory)
+
+Stream.each(episodes, fn episode ->
+  IO.inspect("Writing File #{episode.title}")
+  out_path = Path.join(out_directory, episode.title <> ".md")
+  File.write!(out_path, episode_to_markdown.(episode))
+end)
+|> Stream.run()
+```
